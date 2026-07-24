@@ -13,7 +13,9 @@ set -euo pipefail
 # Common overrides:
 #   DATA_DIR=~/shared/hdd_ext/nvme1/public/vision/classification/imageNet bash run_average_budget_experiments.sh
 #   CUDA_VISIBLE_DEVICES=2,8 bash run_average_budget_experiments.sh
+#   RUN_BASELINE=0 bash run_average_budget_experiments.sh
 #   EPOCHS_SUPERNET=300 EPOCHS_ROUTER=100 EPOCHS_JOINT=100 TARGET_BUDGETS="6" bash run_average_budget_experiments.sh
+#   STAGE=baseline bash run_average_budget_experiments.sh
 #   STAGE=router SUPERNET_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
 #   STAGE=router RUN_JOINT=0 SUPERNET_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
 #   STAGE=joint ROUTER_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
@@ -24,6 +26,7 @@ CUDA_IDS="${2:-${CUDA_VISIBLE_DEVICES:-2,8}}"
 SEED="${SEED:-42}"
 BATCH_SIZE="${BATCH_SIZE:-512}"
 WORKERS="${WORKERS:-8}"
+EPOCHS_BASELINE="${EPOCHS_BASELINE:-300}"
 EPOCHS_SUPERNET="${EPOCHS_SUPERNET:-300}"
 EPOCHS_ROUTER="${EPOCHS_ROUTER:-100}"
 EPOCHS_JOINT="${EPOCHS_JOINT:-100}"
@@ -32,6 +35,7 @@ BUDGET_WEIGHT="${BUDGET_WEIGHT:-0.01}"
 PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/mixed_budget_v1.yml}"
 RESULTS_DIR="${RESULTS_DIR:-results/average_budget}"
 STAGE="${STAGE:-all}"
+RUN_BASELINE="${RUN_BASELINE:-1}"
 FREEZE_ROUTER_BACKBONE="${FREEZE_ROUTER_BACKBONE:-1}"
 RUN_JOINT="${RUN_JOINT:-1}"
 JOINT_LR="${JOINT_LR:-1e-4}"
@@ -75,6 +79,15 @@ COMMON_TRAIN_ARGS=(
   --cuda "${CUDA_IDS}"
 )
 
+run_baseline() {
+  echo "[Stage 0] ViT-S baseline training"
+  torchrun --nproc_per_node="${NPROC}" train_sh.py "${DATA_DIR}" \
+    --model vit_small_patch16_224_depth12 \
+    --epochs "${EPOCHS_BASELINE}" \
+    --seed "${SEED}" \
+    "${COMMON_TRAIN_ARGS[@]}"
+}
+
 find_latest_checkpoint() {
   local latest_dir
   latest_dir=$(find output/train -maxdepth 1 -type d -name 'pattern_mlp_vit_small_patch16_224_depth12_*' -printf '%T@ %p\n' 2>/dev/null | sort -nr | awk 'NR==1 {print $2}')
@@ -87,6 +100,10 @@ find_latest_checkpoint() {
     find "${latest_dir}" -maxdepth 1 -type f -name 'checkpoint-*.pth.tar' | sort -V | tail -n 1
   fi
 }
+
+if [[ "${STAGE}" == "all" && "${RUN_BASELINE}" == "1" || "${STAGE}" == "baseline" ]]; then
+  run_baseline
+fi
 
 if [[ "${STAGE}" == "all" || "${STAGE}" == "supernet" ]]; then
   echo "[Stage A] Uniform sampled supernet training"

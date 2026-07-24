@@ -8,15 +8,17 @@ set -euo pipefail
 #   that keeps the average active MLP count near the target budget.
 #
 # Usage:
-#   CUDA_VISIBLE_DEVICES=0,1 bash run_average_budget_experiments.sh [DATA_DIR] [GPU_IDS]
+#   bash run_average_budget_experiments.sh [DATA_DIR] [GPU_IDS]
 #
 # Common overrides:
+#   DATA_DIR=~/shared/hdd_ext/nvme1/public/vision/classification/imageNet bash run_average_budget_experiments.sh
+#   CUDA_VISIBLE_DEVICES=2,8 bash run_average_budget_experiments.sh
 #   EPOCHS_SUPERNET=300 EPOCHS_ROUTER=100 TARGET_BUDGETS="6" bash run_average_budget_experiments.sh
 #   STAGE=router SUPERNET_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
 
 DEFAULT_DATA_DIR="${HOME}/shared/hdd_ext/nvme1/public/vision/classification/imageNet"
-DATA_DIR="${1:-${DEFAULT_DATA_DIR}}"
-CUDA_IDS="${2:-${CUDA_VISIBLE_DEVICES:-0,1}}"
+DATA_DIR="${1:-${DATA_DIR:-${DEFAULT_DATA_DIR}}}"
+CUDA_IDS="${2:-${CUDA_VISIBLE_DEVICES:-2,8}}"
 SEED="${SEED:-42}"
 BATCH_SIZE="${BATCH_SIZE:-512}"
 WORKERS="${WORKERS:-8}"
@@ -32,7 +34,15 @@ FREEZE_ROUTER_BACKBONE="${FREEZE_ROUTER_BACKBONE:-1}"
 IFS=',' read -ra GPU_ARRAY <<< "${CUDA_IDS}"
 NPROC="${NPROC:-${#GPU_ARRAY[@]}}"
 
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES="${CUDA_IDS}"
+
 mkdir -p "${RESULTS_DIR}"
+
+echo "DATA_DIR=${DATA_DIR}"
+echo "CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER}"
+echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
+echo "NPROC=${NPROC}"
 
 COMMON_TRAIN_ARGS=(
   --val-split val

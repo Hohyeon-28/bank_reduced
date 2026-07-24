@@ -13,8 +13,10 @@ set -euo pipefail
 # Common overrides:
 #   DATA_DIR=~/shared/hdd_ext/nvme1/public/vision/classification/imageNet bash run_average_budget_experiments.sh
 #   CUDA_VISIBLE_DEVICES=2,8 bash run_average_budget_experiments.sh
-#   EPOCHS_SUPERNET=300 EPOCHS_ROUTER=100 TARGET_BUDGETS="6" bash run_average_budget_experiments.sh
+#   EPOCHS_SUPERNET=300 EPOCHS_ROUTER=100 EPOCHS_JOINT=100 TARGET_BUDGETS="6" bash run_average_budget_experiments.sh
 #   STAGE=router SUPERNET_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
+#   STAGE=router RUN_JOINT=0 SUPERNET_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
+#   STAGE=joint ROUTER_CHECKPOINT=/path/to/model_best.pth.tar bash run_average_budget_experiments.sh
 
 DEFAULT_DATA_DIR="${HOME}/shared/hdd_ext/nvme1/public/vision/classification/imageNet"
 DATA_DIR="${1:-${DATA_DIR:-${DEFAULT_DATA_DIR}}}"
@@ -24,12 +26,16 @@ BATCH_SIZE="${BATCH_SIZE:-512}"
 WORKERS="${WORKERS:-8}"
 EPOCHS_SUPERNET="${EPOCHS_SUPERNET:-300}"
 EPOCHS_ROUTER="${EPOCHS_ROUTER:-100}"
+EPOCHS_JOINT="${EPOCHS_JOINT:-100}"
 TARGET_BUDGETS="${TARGET_BUDGETS:-6}"
 BUDGET_WEIGHT="${BUDGET_WEIGHT:-0.01}"
 PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/mixed_budget_v1.yml}"
 RESULTS_DIR="${RESULTS_DIR:-results/average_budget}"
 STAGE="${STAGE:-all}"
 FREEZE_ROUTER_BACKBONE="${FREEZE_ROUTER_BACKBONE:-1}"
+RUN_JOINT="${RUN_JOINT:-1}"
+JOINT_LR="${JOINT_LR:-1e-4}"
+JOINT_WARMUP_EPOCHS="${JOINT_WARMUP_EPOCHS:-5}"
 
 IFS=',' read -ra GPU_ARRAY <<< "${CUDA_IDS}"
 NPROC="${NPROC:-${#GPU_ARRAY[@]}}"
@@ -43,6 +49,7 @@ echo "DATA_DIR=${DATA_DIR}"
 echo "CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER}"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 echo "NPROC=${NPROC}"
+echo "STAGE=${STAGE}"
 
 COMMON_TRAIN_ARGS=(
   --val-split val
@@ -91,6 +98,32 @@ if [[ "${STAGE}" == "all" || "${STAGE}" == "supernet" ]]; then
     "${COMMON_TRAIN_ARGS[@]}"
 fi
 
+run_joint_finetune() {
+  local target="$1"
+  local checkpoint="$2"
+
+  if [[ -z "${checkpoint}" ]]; then
+    echo "ROUTER_CHECKPOINT is required for joint fine-tuning." >&2
+    exit 2
+  fi
+
+  echo "[Stage D] Joint fine-tuning with average budget target ${target}"
+  echo "Using router checkpoint: ${checkpoint}"
+  printf '%s\n' "${checkpoint}" > "${RESULTS_DIR}/router_checkpoint_budget${target}.txt"
+
+  torchrun --nproc_per_node="${NPROC}" train_sh.py "${DATA_DIR}" \
+    --model pattern_mlp_vit_small_patch16_224_depth12 \
+    --epochs "${EPOCHS_JOINT}" \
+    --seed "${SEED}" \
+    --initial-checkpoint "${checkpoint}" \
+    --pattern-budget-target "${target}" \
+    --pattern-budget-weight "${BUDGET_WEIGHT}" \
+    --model-kwargs pattern_mode=router pattern_bank="${PATTERN_BANK}" router_init=zero_logits \
+    "${COMMON_TRAIN_ARGS[@]}" \
+    --lr "${JOINT_LR}" \
+    --warmup-epochs "${JOINT_WARMUP_EPOCHS}"
+}
+
 if [[ "${STAGE}" == "all" || "${STAGE}" == "router" ]]; then
   if [[ -z "${SUPERNET_CHECKPOINT:-}" ]]; then
     SUPERNET_CHECKPOINT="$(find_latest_checkpoint || true)"
@@ -120,6 +153,20 @@ if [[ "${STAGE}" == "all" || "${STAGE}" == "router" ]]; then
       "${ROUTER_FREEZE_ARGS[@]}" \
       --model-kwargs pattern_mode=router pattern_bank="${PATTERN_BANK}" router_init=zero_logits \
       "${COMMON_TRAIN_ARGS[@]}"
+
+    ROUTER_CHECKPOINT="$(find_latest_checkpoint || true)"
+    if [[ "${RUN_JOINT}" == "1" ]]; then
+      run_joint_finetune "${TARGET}" "${ROUTER_CHECKPOINT}"
+    fi
+  done
+fi
+
+if [[ "${STAGE}" == "joint" ]]; then
+  if [[ -z "${ROUTER_CHECKPOINT:-}" ]]; then
+    ROUTER_CHECKPOINT="$(find_latest_checkpoint || true)"
+  fi
+  for TARGET in ${TARGET_BUDGETS}; do
+    run_joint_finetune "${TARGET}" "${ROUTER_CHECKPOINT}"
   done
 fi
 

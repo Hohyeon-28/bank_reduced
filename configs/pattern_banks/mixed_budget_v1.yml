@@ -1,0 +1,13 @@
+# Mixed-cost pattern bank for average-budget adaptive MLP routing.
+# The bank intentionally mixes lite/mid/heavy/full paths so the router can
+# allocate more MLP compute to harder samples while keeping the average budget.
+early4: [1,1,1,1,0,0,0,0,0,0,0,0]
+late4: [0,0,0,0,0,0,0,0,1,1,1,1]
+spread4: [1,0,0,1,0,0,1,0,0,1,0,0]
+early6: [1,1,1,1,1,1,0,0,0,0,0,0]
+late6: [0,0,0,0,0,0,1,1,1,1,1,1]
+alternating6_a: [1,0,1,0,1,0,1,0,1,0,1,0]
+alternating6_b: [0,1,0,1,0,1,0,1,0,1,0,1]
+early8: [1,1,1,1,1,1,1,1,0,0,0,0]
+late8: [0,0,0,0,1,1,1,1,1,1,1,1]
+full12: [1,1,1,1,1,1,1,1,1,1,1,1]

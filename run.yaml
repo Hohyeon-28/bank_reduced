@@ -1,0 +1,14 @@
+session_name: ryu
+windows:
+  - window_name: window
+    layout: tiled
+    panes:
+      - shell_command:
+          # baseline
+          - torchrun --nproc_per_node=2 --master_port=12350 train_sh.py ../DATA/imageNet --aa rand-m9-mstd0.5-inc1 --mixup .8 --cutmix 1.0 --aug-repeats 0 --remode pixel --reprob 0.25 --drop-path .1 --opt adamw --weight-decay .05 --sched cosine --epochs 300 --lr 1e-3 --warmup-lr 1e-6 --min-lr 1e-5 --warmup-epoch 5 --smoothing 0.1 --batch-size 256 --grad-accumulation 2 -j 8 --amp --model vit_small_patch16_224_depth6 --cuda 0,1 --log-wandb
+      - shell_command:
+          # router_e256
+          - torchrun --nproc_per_node=2 --master_port=12352 train_sh.py ../DATA/imageNet --aa rand-m9-mstd0.5-inc1 --mixup .8 --cutmix 1.0 --aug-repeats 0 --remode pixel --reprob 0.25 --drop-path .1 --opt adamw --weight-decay .05 --sched cosine --epochs 600 --lr 1e-3 --warmup-lr 1e-6 --min-lr 1e-5 --warmup-epoch 5 --smoothing 0.1 --batch-size 512 --grad-accumulation 2 -j 8 --amp --model router_vit_small_patch16_224_depth12_6_e256 --cuda 4,5 --log-wandb
+      - shell_command:
+          # router_e256 partial routing, mlp skip, batch 512
+          - torchrun --nproc_per_node=2 --master_port=12354 train_sh.py ../DATA/imageNet --aa rand-m9-mstd0.5-inc1 --mixup .8 --cutmix 1.0 --aug-repeats 0 --remode pixel --reprob 0.25 --drop-path .1 --opt adamw --weight-decay .05 --sched cosine --epochs 600 --lr 1e-3 --warmup-lr 1e-6 --min-lr 1e-5 --warmup-epoch 5 --smoothing 0.1 --batch-size 512 --grad-accumulation 2 -j 8 --amp --model router_vit_small_patch16_224_depth12_6_e256_partial_mlp --cuda 0,1 --log-wandb

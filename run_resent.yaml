@@ -1,0 +1,14 @@
+session_name: ryu
+windows:
+  - window_name: window
+    layout: tiled
+    panes:
+      - shell_command:
+        # baseline resnet50_block8 out of block16 option1
+        - torchrun --nproc_per_node=2 --master_port=12361 train_sh.py ../DATA/imageNet --aa rand-m7-mstd0.5-inc1 --mixup .1 --cutmix 1.0 --aug-repeats 3 --remode pixel --reprob 0.0 --crop-pct 0.95 --drop-path .05 --smoothing 0.0 --bce-loss --bce-target-thresh 0.2 --opt lamb --weight-decay .02 --sched cosine --epochs 300 --lr 3.5e-3 --warmup-lr 1e-4 -b 128 -j 8 --grad-accumulation 2 --model resnet50_block8_option1 --amp --cuda 0,1
+      - shell_command:
+        # baseline resnet50_block8 out of block16 option1
+        - torchrun --nproc_per_node=2 --master_port=12362 train_sh.py ../DATA/imageNet --aa rand-m7-mstd0.5-inc1 --mixup .1 --cutmix 1.0 --aug-repeats 3 --remode pixel --reprob 0.0 --crop-pct 0.95 --drop-path .05 --smoothing 0.0 --bce-loss --bce-target-thresh 0.2 --opt lamb --weight-decay .02 --sched cosine --epochs 300 --lr 3.5e-3 --warmup-lr 1e-4 -b 128 -j 8 --grad-accumulation 2 --model resnet50_block8_option2 --amp --cuda 0,1
+      - shell_command:
+        # router_resnet50_block16_8
+        - torchrun --nproc_per_node=2 --master_port=12363 train_sh.py ../DATA/imageNet --aa rand-m7-mstd0.5-inc1 --mixup .1 --cutmix 1.0 --aug-repeats 3 --remode pixel --reprob 0.0 --crop-pct 0.95 --drop-path .05 --smoothing 0.0 --bce-loss --bce-target-thresh 0.2 --opt lamb --weight-decay .02 --sched cosine --epochs 600 --lr 3.5e-3 --warmup-lr 1e-4 -b 256 -j 8 --grad-accumulation 2 --model router_resnet50_block16_8_e256 --amp --cuda 2,3

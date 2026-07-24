@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+output/
+results/
+wandb/
+runs/
+logs/
+
+*.pth
+*.pth.tar
+*.pt
+*.ckpt
+
+.DS_Store

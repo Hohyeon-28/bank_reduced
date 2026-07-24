@@ -1,0 +1,24 @@
+session_name: ryu
+windows:
+  - window_name: window
+    layout: tiled
+    panes:
+      - shell_command:
+          # baseline
+          - CUDA_VISIBLE_DEVICES=5 python validate.py ../DATA/imageNet --model vit_small_patch16_224_depth6 --checkpoint output/train/vit_small_patch16_224_depth6_20250509_220922/model_best.pth.tar --amp
+#          - CUDA_VISIBLE_DEVICES=4 python benchmark.py --model vit_small_patch16_224_depth6 --bench inference
+          # router_e256
+          - CUDA_VISIBLE_DEVICES=5 python validate.py ../DATA/imageNet --model router_vit_small_patch16_224_depth12_6_e256 --checkpoint output/train/router_vit_small_patch16_224_depth12_6_e256_20250509_220820/model_best.pth.tar --amp
+#          - CUDA_VISIBLE_DEVICES=4 python benchmark.py --model router_vit_small_patch16_224_depth12_6_e256 --bench inference
+          # router_e256_depth12_8
+          - CUDA_VISIBLE_DEVICES=5 python validate.py ../DATA/imageNet --model router_vit_small_patch16_224_depth12_8_e256 --checkpoint output/train/router_vit_small_patch16_224_depth12_8_e256_20250528_153143/model_best.pth.tar --amp
+#          - CUDA_VISIBLE_DEVICES=4 python benchmark.py --model router_vit_small_patch16_224_depth12_8_e256 --bench inference
+          # router_e256_partial mlp vit-small
+          - CUDA_VISIBLE_DEVICES=5 python validate.py ../DATA/imageNet --model router_vit_small_patch16_224_depth12_6_e256_partial_mlp --checkpoint output/train/router_vit_small_patch16_224_depth12_6_e256_partial_mlp_20250610_150736/model_best.pth.tar --amp
+#          - CUDA_VISIBLE_DEVICES=4 python benchmark.py --model router_vit_small_patch16_224_depth12_6_e256_partial_mlp --bench inference
+          # router_e256_partial mlp auxBCE vit-small
+#          - CUDA_VISIBLE_DEVICES=5 python validate.py ../DATA/imageNet --model router_vit_small_patch16_224_depth12_6_e256_partial_attention_auxBCELoss --checkpoint output/train/router_vit_small_patch16_224_depth12_6_e256_partial_attention_auxBCELoss_20250624_154042/model_best.pth.tar --amp
+#          - CUDA_VISIBLE_DEVICES=4 python benchmark.py --model router_vit_small_patch16_224_depth12_6_e256_partial_mlp --bench inference
+
+          # router_e256_partial_mlp vit-Base
+          # CUDA_VISIBLE_DEVICES=5 python validate.py ../DATA/imageNet --model router_vit_base_patch16_224_depth12_6_e256_partial_mlp --checkpoint output/train/router_vit_base_patch16_224_depth12_6_e256_partial_mlp_20250626_211927/model_best.pth.tar

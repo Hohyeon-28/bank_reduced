@@ -80,7 +80,7 @@ COMMON_TRAIN_ARGS=(
 )
 
 run_baseline() {
-  echo "[Stage 0] ViT-S baseline training"
+  echo "[Stage Z] ViT-S baseline training"
   torchrun --nproc_per_node="${NPROC}" train_sh.py "${DATA_DIR}" \
     --model vit_small_patch16_224_depth12 \
     --epochs "${EPOCHS_BASELINE}" \
@@ -101,7 +101,7 @@ find_latest_checkpoint() {
   fi
 }
 
-if [[ "${STAGE}" == "all" && "${RUN_BASELINE}" == "1" || "${STAGE}" == "baseline" ]]; then
+if [[ "${STAGE}" == "baseline" ]]; then
   run_baseline
 fi
 
@@ -185,6 +185,10 @@ if [[ "${STAGE}" == "joint" ]]; then
   for TARGET in ${TARGET_BUDGETS}; do
     run_joint_finetune "${TARGET}" "${ROUTER_CHECKPOINT}"
   done
+fi
+
+if [[ "${STAGE}" == "all" && "${RUN_BASELINE}" == "1" ]]; then
+  run_baseline
 fi
 
 echo "Done. Use scripts/analyze_pattern_results.py to summarize output/train into results/analysis."

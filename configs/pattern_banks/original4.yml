@@ -1,0 +1,6 @@
+# Original 4-pattern bank used by the structured MLP routing model.
+# 1 means Attention + MLP, 0 means Attention only with the MLP residual skipped.
+full: [1,1,1,1,1,1,1,1,1,1,1,1]
+late_heavy: [0,0,0,0,0,0,1,1,1,1,1,1]
+anchor: [0,0,0,1,0,0,0,1,0,0,0,1]
+alternating: [1,0,1,0,1,0,1,0,1,0,1,0]

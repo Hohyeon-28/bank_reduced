@@ -32,7 +32,8 @@ EPOCHS_ROUTER="${EPOCHS_ROUTER:-100}"
 EPOCHS_JOINT="${EPOCHS_JOINT:-100}"
 TARGET_BUDGETS="${TARGET_BUDGETS:-6}"
 BUDGET_WEIGHT="${BUDGET_WEIGHT:-0.01}"
-PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/mixed_budget_v1.yml}"
+PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/original4.yml}"
+SUPERNET_EVAL_PATTERN="${SUPERNET_EVAL_PATTERN:-late_heavy}"
 RESULTS_DIR="${RESULTS_DIR:-results/average_budget}"
 STAGE="${STAGE:-all}"
 RUN_BASELINE="${RUN_BASELINE:-1}"
@@ -54,6 +55,8 @@ echo "CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER}"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 echo "NPROC=${NPROC}"
 echo "STAGE=${STAGE}"
+echo "PATTERN_BANK=${PATTERN_BANK}"
+echo "SUPERNET_EVAL_PATTERN=${SUPERNET_EVAL_PATTERN}"
 
 COMMON_TRAIN_ARGS=(
   --val-split val
@@ -111,7 +114,7 @@ if [[ "${STAGE}" == "all" || "${STAGE}" == "supernet" ]]; then
     --model pattern_mlp_vit_small_patch16_224_depth12 \
     --epochs "${EPOCHS_SUPERNET}" \
     --seed "${SEED}" \
-    --model-kwargs pattern_mode=sampled_uniform pattern_bank="${PATTERN_BANK}" fixed_pattern=late6 \
+    --model-kwargs pattern_mode=sampled_uniform pattern_bank="${PATTERN_BANK}" fixed_pattern="${SUPERNET_EVAL_PATTERN}" \
     "${COMMON_TRAIN_ARGS[@]}"
 fi
 

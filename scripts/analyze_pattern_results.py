@@ -120,6 +120,13 @@ def classify_run(args, model_kwargs):
     if mode == "router" and bank_name == "patterns_mixed.yml":
         suffix = f"budget{budget}" if budget else "budget_unknown"
         return "Q3B", f"router_mixed_{suffix}", suffix
+    if bank_name == "original4.yml":
+        suffix = f"budget{budget}" if budget else "budget_unknown"
+        if mode == "sampled_uniform":
+            return "ReducedBank", "original4_sampled_uniform", fixed or "sampled_uniform"
+        if mode == "router":
+            return "ReducedBank", f"original4_router_{suffix}", f"router_{suffix}"
+        return "ReducedBank", f"original4_{mode}", fixed or mode or "original4"
     if bank_name in ("bank2.yml", "bank4.yml", "bank8.yml"):
         return "Q4", f"{bank_stem}_{mode}", f"{bank_stem}_{mode}"
     return "unknown", "_".join(x for x in (mode, bank_stem, fixed) if x) or "unknown", fixed or mode or bank_stem or "unknown"

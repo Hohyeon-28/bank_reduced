@@ -760,6 +760,10 @@ def train_one_epoch(
         epoch, model, loader, optimizer, loss_fn, args,
         lr_scheduler=None, saver=None, output_dir=None, amp_autocast=suppress,
         loss_scaler=None, model_ema=None, mixup_fn=None):
+    progress_model = model.module if hasattr(model, 'module') else model
+    if hasattr(progress_model, 'set_training_progress'):
+        progress_model.set_training_progress(epoch, args.epochs)
+
     if args.mixup_off_epoch and epoch >= args.mixup_off_epoch:
         if args.prefetcher and loader.mixup_enabled:
             loader.mixup_enabled = False

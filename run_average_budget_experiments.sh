@@ -4,7 +4,7 @@ set -euo pipefail
 # Average-budget adaptive MLP routing experiment.
 #
 # Motivation:
-#   Train candidate patterns fairly with uniform sampling, then train a router
+#   Train candidate patterns fairly with quota-balanced random sampling, then train a router
 #   that keeps the average active MLP count near the target budget.
 #
 # Usage:
@@ -24,7 +24,7 @@ DEFAULT_DATA_DIR="${HOME}/shared/hdd_ext/nvme1/public/vision/classification/imag
 DATA_DIR="${1:-${DATA_DIR:-${DEFAULT_DATA_DIR}}}"
 CUDA_IDS="${2:-${CUDA_VISIBLE_DEVICES:-2,8}}"
 SEED="${SEED:-42}"
-BATCH_SIZE="${BATCH_SIZE:-512}"
+BATCH_SIZE="${BATCH_SIZE:-256}"
 WORKERS="${WORKERS:-8}"
 EPOCHS_BASELINE="${EPOCHS_BASELINE:-300}"
 EPOCHS_SUPERNET="${EPOCHS_SUPERNET:-300}"
@@ -32,8 +32,8 @@ EPOCHS_ROUTER="${EPOCHS_ROUTER:-100}"
 EPOCHS_JOINT="${EPOCHS_JOINT:-100}"
 TARGET_BUDGETS="${TARGET_BUDGETS:-6}"
 BUDGET_WEIGHT="${BUDGET_WEIGHT:-0.01}"
-PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/original4.yml}"
-SUPERNET_EVAL_PATTERN="${SUPERNET_EVAL_PATTERN:-late_heavy}"
+PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/random_budget6_bank12_seed42.yml}"
+SUPERNET_EVAL_PATTERN="${SUPERNET_EVAL_PATTERN:-rand6_01}"
 RESULTS_DIR="${RESULTS_DIR:-results/average_budget}"
 STAGE="${STAGE:-all}"
 RUN_BASELINE="${RUN_BASELINE:-1}"
@@ -55,6 +55,7 @@ echo "CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER}"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 echo "NPROC=${NPROC}"
 echo "STAGE=${STAGE}"
+echo "BATCH_SIZE=${BATCH_SIZE}"
 echo "PATTERN_BANK=${PATTERN_BANK}"
 echo "SUPERNET_EVAL_PATTERN=${SUPERNET_EVAL_PATTERN}"
 
@@ -114,7 +115,7 @@ if [[ "${STAGE}" == "all" || "${STAGE}" == "supernet" ]]; then
     --model pattern_mlp_vit_small_patch16_224_depth12 \
     --epochs "${EPOCHS_SUPERNET}" \
     --seed "${SEED}" \
-    --model-kwargs pattern_mode=sampled_uniform pattern_bank="${PATTERN_BANK}" fixed_pattern="${SUPERNET_EVAL_PATTERN}" \
+    --model-kwargs pattern_mode=sampled_quota pattern_bank="${PATTERN_BANK}" fixed_pattern="${SUPERNET_EVAL_PATTERN}" \
     "${COMMON_TRAIN_ARGS[@]}"
 fi
 

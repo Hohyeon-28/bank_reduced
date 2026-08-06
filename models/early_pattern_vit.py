@@ -130,6 +130,9 @@ class PatternMLPViT(VisionTransformer):
             router_tau: float = 1.0,
             router_init: str = "zero_logits",
             router_probe_blocks: int = 0,
+            router_random_start_prob: float = 0.0,
+            router_random_mid_prob: float = 0.0,
+            router_random_end_prob: float = 0.0,
             **kwargs):
         # timm.create_model forwards registry/build metadata that this local
         # VisionTransformer implementation does not accept directly.
@@ -142,8 +145,8 @@ class PatternMLPViT(VisionTransformer):
         names, patterns = load_pattern_bank(pattern_bank)
         if patterns.shape[1] != len(self.blocks):
             raise ValueError(f"Pattern length ({patterns.shape[1]}) must match depth ({len(self.blocks)}).")
-        if pattern_mode not in ("fixed", "sampled_supernet", "sampled_uniform", "router"):
-            raise ValueError("pattern_mode must be one of fixed, sampled_supernet, sampled_uniform, router.")
+        if pattern_mode not in ("fixed", "sampled_supernet", "sampled_uniform", "sampled_quota", "router"):
+            raise ValueError("pattern_mode must be one of fixed, sampled_supernet, sampled_uniform, sampled_quota, router.")
         if router_probe_blocks < 0 or router_probe_blocks >= len(self.blocks):
             raise ValueError("router_probe_blocks must be in [0, depth - 1].")
 
@@ -155,6 +158,11 @@ class PatternMLPViT(VisionTransformer):
         self.fixed_pattern = fixed_pattern or names[0]
         self.router_tau = router_tau
         self.router_probe_blocks = router_probe_blocks
+        self.router_random_start_prob = float(router_random_start_prob)
+        self.router_random_mid_prob = float(router_random_mid_prob)
+        self.router_random_end_prob = float(router_random_end_prob)
+        self.training_epoch = 0
+        self.training_epochs = 1
         self.pattern_router = nn.Linear(self.embed_dim, self.num_patterns)
         self._sample_cursor = 0
         self._last_routing: Optional[Dict[str, torch.Tensor]] = None
@@ -172,6 +180,26 @@ class PatternMLPViT(VisionTransformer):
         if name not in self.pattern_names:
             raise ValueError(f"Unknown pattern {name}. Available: {self.pattern_names}")
         return self.pattern_names.index(name)
+
+    def set_training_progress(self, epoch: int, num_epochs: int) -> None:
+        self.training_epoch = int(epoch)
+        self.training_epochs = max(int(num_epochs), 1)
+
+    def _quota_indices(self, bsz: int, device: torch.device) -> torch.Tensor:
+        repeats = (bsz + self.num_patterns - 1) // self.num_patterns
+        idx = torch.arange(self.num_patterns, device=device, dtype=torch.long).repeat(repeats)[:bsz]
+        return idx[torch.randperm(bsz, device=device)]
+
+    def _router_random_prob(self) -> float:
+        if self.training_epochs <= 1:
+            frac = 1.0
+        else:
+            frac = self.training_epoch / max(self.training_epochs - 1, 1)
+        if frac < 0.3:
+            return self.router_random_start_prob
+        if frac < 0.7:
+            return self.router_random_mid_prob
+        return self.router_random_end_prob
 
     def _select_patterns(self, x: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         bsz = x.shape[0]
@@ -199,10 +227,23 @@ class PatternMLPViT(VisionTransformer):
             selection_probs = F.one_hot(idx, num_classes=self.num_patterns).to(dtype=x.dtype)
             soft_probs = selection_probs
             logits = selection_probs
+        elif self.pattern_mode == "sampled_quota":
+            if self.training:
+                idx = self._quota_indices(bsz, device)
+            else:
+                idx = torch.full((bsz,), self._pattern_index(self.fixed_pattern), device=device, dtype=torch.long)
+            selection_probs = F.one_hot(idx, num_classes=self.num_patterns).to(dtype=x.dtype)
+            soft_probs = selection_probs
+            logits = selection_probs
         else:
             logits = self.pattern_router(x.mean(dim=1))
             soft_probs = logits.softmax(dim=-1)
-            if self.training:
+            random_prob = self._router_random_prob() if self.training else 0.0
+            use_random = self.training and random_prob > 0 and random.random() < random_prob
+            if use_random:
+                idx = self._quota_indices(bsz, device)
+                selection_probs = F.one_hot(idx, num_classes=self.num_patterns).to(dtype=x.dtype)
+            elif self.training:
                 selection_probs = F.gumbel_softmax(logits, tau=self.router_tau, hard=True, dim=-1)
                 idx = selection_probs.argmax(dim=-1)
             else:

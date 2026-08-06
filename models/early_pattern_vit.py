@@ -301,7 +301,13 @@ class PatternMLPViT(VisionTransformer):
             x, routing = self.forward_features(x, return_routing=True)
             return self.forward_head(x, pre_logits=False), self.routing_info_to_python(routing)
         x = self.forward_features(x)
-        return self.forward_head(x, pre_logits=False)
+        logits = self.forward_head(x, pre_logits=False)
+        if self.training and self._last_routing is not None:
+            # DDP find_unused_parameters only traverses tensors returned from
+            # forward. Keep the router budget graph visible even though the
+            # actual budget loss is added in the training loop.
+            logits = logits + self._last_routing["expected_active_mlp"].mean().to(dtype=logits.dtype) * 0.0
+        return logits
 
     def get_budget_loss(self, target_active_mlp: Optional[float], weight: float = 1.0) -> torch.Tensor:
         if not target_active_mlp or weight == 0 or self._last_routing is None:

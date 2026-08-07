@@ -113,6 +113,9 @@ def classify_run(args, model_kwargs):
 
     if mode == "fixed":
         return "Q1", f"fixed_{fixed}", fixed or "fixed"
+    if mode == "utility_topk":
+        budget_label = f"top{budget}" if budget else "topk"
+        return "UtilityTopK", f"utility_{budget_label}", f"utility_{budget_label}"
     if mode == "sampled_supernet" and bank_name == "patterns_6.yml":
         return "Q2", "sampled_supernet_patterns6", "sampled_supernet"
     if mode == "router" and bank_name == "bank4.yml":

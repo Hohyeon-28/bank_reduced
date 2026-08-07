@@ -133,6 +133,7 @@ class PatternMLPViT(VisionTransformer):
             router_random_start_prob: float = 0.0,
             router_random_mid_prob: float = 0.0,
             router_random_end_prob: float = 0.0,
+            utility_topk_k: int = 6,
             **kwargs):
         # timm.create_model forwards registry/build metadata that this local
         # VisionTransformer implementation does not accept directly.
@@ -142,13 +143,19 @@ class PatternMLPViT(VisionTransformer):
                 "no_jit", "bn_momentum", "bn_eps", "drop_connect_rate"):
             kwargs.pop(key, None)
         super().__init__(block_fn=PatternMLPBlock, **kwargs)
-        names, patterns = load_pattern_bank(pattern_bank)
+        if pattern_mode == "utility_topk":
+            names = [f"layer_{i + 1:02d}" for i in range(len(self.blocks))]
+            patterns = torch.eye(len(self.blocks), dtype=torch.float32)
+        else:
+            names, patterns = load_pattern_bank(pattern_bank)
         if patterns.shape[1] != len(self.blocks):
             raise ValueError(f"Pattern length ({patterns.shape[1]}) must match depth ({len(self.blocks)}).")
-        if pattern_mode not in ("fixed", "sampled_supernet", "sampled_uniform", "sampled_quota", "router"):
-            raise ValueError("pattern_mode must be one of fixed, sampled_supernet, sampled_uniform, sampled_quota, router.")
+        if pattern_mode not in ("fixed", "sampled_supernet", "sampled_uniform", "sampled_quota", "router", "utility_topk"):
+            raise ValueError("pattern_mode must be one of fixed, sampled_supernet, sampled_uniform, sampled_quota, router, utility_topk.")
         if router_probe_blocks < 0 or router_probe_blocks >= len(self.blocks):
             raise ValueError("router_probe_blocks must be in [0, depth - 1].")
+        if utility_topk_k < 1 or utility_topk_k > len(self.blocks):
+            raise ValueError("utility_topk_k must be in [1, depth].")
 
         self.pattern_names = names
         self.register_buffer("patterns", patterns)
@@ -161,9 +168,11 @@ class PatternMLPViT(VisionTransformer):
         self.router_random_start_prob = float(router_random_start_prob)
         self.router_random_mid_prob = float(router_random_mid_prob)
         self.router_random_end_prob = float(router_random_end_prob)
+        self.utility_topk_k = int(utility_topk_k)
         self.training_epoch = 0
         self.training_epochs = 1
-        self.pattern_router = nn.Linear(self.embed_dim, self.num_patterns)
+        router_dim = len(self.blocks) if pattern_mode == "utility_topk" else self.num_patterns
+        self.pattern_router = nn.Linear(self.embed_dim, router_dim)
         self._sample_cursor = 0
         self._last_routing: Optional[Dict[str, torch.Tensor]] = None
         self._init_pattern_router(router_init)
@@ -189,6 +198,11 @@ class PatternMLPViT(VisionTransformer):
         repeats = (bsz + self.num_patterns - 1) // self.num_patterns
         idx = torch.arange(self.num_patterns, device=device, dtype=torch.long).repeat(repeats)[:bsz]
         return idx[torch.randperm(bsz, device=device)]
+
+    def _random_topk_mask(self, bsz: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+        noise = torch.rand(bsz, len(self.blocks), device=device, dtype=dtype)
+        idx = noise.topk(self.utility_topk_k, dim=-1).indices
+        return torch.zeros(bsz, len(self.blocks), device=device, dtype=dtype).scatter(1, idx, 1.0)
 
     def _router_random_prob(self) -> float:
         if self.training_epochs <= 1:
@@ -235,6 +249,36 @@ class PatternMLPViT(VisionTransformer):
             selection_probs = F.one_hot(idx, num_classes=self.num_patterns).to(dtype=x.dtype)
             soft_probs = selection_probs
             logits = selection_probs
+        elif self.pattern_mode == "utility_topk":
+            logits = self.pattern_router(x.mean(dim=1))
+            soft_masks = logits.sigmoid()
+            random_prob = self._router_random_prob() if self.training else 0.0
+            use_random = self.training and random_prob > 0 and random.random() < random_prob
+            if use_random:
+                hard_masks = self._random_topk_mask(bsz, device, x.dtype)
+            else:
+                idx = logits.topk(self.utility_topk_k, dim=-1).indices
+                hard_masks = torch.zeros_like(logits).scatter(1, idx, 1.0)
+            if self.training:
+                masks = hard_masks + soft_masks - soft_masks.detach()
+            else:
+                masks = hard_masks
+            if self.router_probe_blocks:
+                masks = masks.clone()
+                masks[:, :self.router_probe_blocks] = 1.0
+            active_counts = hard_masks.sum(dim=1)
+            soft_expected_counts = soft_masks.sum(dim=1)
+            if self.router_probe_blocks:
+                soft_expected_counts = self.router_probe_blocks + soft_masks[:, self.router_probe_blocks:].sum(dim=1)
+            return masks, {
+                "pattern_idx": hard_masks.detach().to(dtype=torch.long),
+                "pattern_probs": soft_masks,
+                "pattern_selection_probs": hard_masks.detach(),
+                "pattern_logits": logits,
+                "pattern_masks": hard_masks.detach(),
+                "active_mlp_count": active_counts.detach(),
+                "expected_active_mlp": soft_expected_counts,
+            }
         else:
             logits = self.pattern_router(x.mean(dim=1))
             soft_probs = logits.softmax(dim=-1)
@@ -319,8 +363,15 @@ class PatternMLPViT(VisionTransformer):
         routing = routing or self._last_routing
         if routing is None:
             return {}
-        idx = routing["pattern_idx"].detach().cpu().tolist()
-        names = [self.pattern_names[int(i)] for i in idx]
+        idx_tensor = routing["pattern_idx"].detach().cpu()
+        idx = idx_tensor.tolist()
+        if idx_tensor.ndim == 2:
+            names = [
+                [f"layer_{j + 1:02d}" for j, active in enumerate(row) if active]
+                for row in idx
+            ]
+        else:
+            names = [self.pattern_names[int(i)] for i in idx]
         probs = routing["pattern_probs"].detach().cpu()
         entropy = -(probs.clamp_min(1e-8) * probs.clamp_min(1e-8).log()).sum(dim=1)
         return {

@@ -1,0 +1,7 @@
+# Budget-6 fixed-pattern candidates selected from pairwise MLP risk analysis.
+# 1 means Attention + MLP, 0 means Attention only.
+# These masks are intended for fixed subnet validity experiments.
+low_risk_02: [1,1,0,1,0,0,1,0,1,0,1,0]
+low_risk_07: [1,1,0,0,1,0,1,0,1,0,1,0]
+low_risk_06: [1,1,0,1,0,1,0,0,1,0,1,0]
+low_risk_16: [1,1,0,1,0,0,1,1,0,0,1,0]

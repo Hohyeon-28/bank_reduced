@@ -19,6 +19,7 @@ WORKERS="${WORKERS:-8}"
 EPOCHS="${EPOCHS:-300}"
 PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/pairwise_low_risk_top4.yml}"
 PATTERNS="${PATTERNS:-low_risk_02 low_risk_07 low_risk_06 low_risk_16}"
+MASTER_PORT="${MASTER_PORT:-29500}"
 
 IFS=',' read -ra GPU_ARRAY <<< "${CUDA_IDS}"
 NPROC="${NPROC:-${#GPU_ARRAY[@]}}"
@@ -30,6 +31,7 @@ echo "DATA_DIR=${DATA_DIR}"
 echo "CUDA_DEVICE_ORDER=${CUDA_DEVICE_ORDER}"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"
 echo "NPROC=${NPROC}"
+echo "MASTER_PORT=${MASTER_PORT}"
 echo "BATCH_SIZE=${BATCH_SIZE}"
 echo "EPOCHS=${EPOCHS}"
 echo "PATTERN_BANK=${PATTERN_BANK}"
@@ -61,7 +63,7 @@ COMMON_TRAIN_ARGS=(
 
 for PATTERN in ${PATTERNS}; do
   echo "[Fixed Pattern] ${PATTERN}"
-  torchrun --nproc_per_node="${NPROC}" train_sh.py "${DATA_DIR}" \
+  torchrun --nproc_per_node="${NPROC}" --master_port="${MASTER_PORT}" train_sh.py "${DATA_DIR}" \
     --model pattern_mlp_vit_small_patch16_224_depth12 \
     --epochs "${EPOCHS}" \
     --seed "${SEED}" \

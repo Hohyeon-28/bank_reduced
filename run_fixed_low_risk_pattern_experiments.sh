@@ -20,6 +20,8 @@ EPOCHS="${EPOCHS:-300}"
 PATTERN_BANK="${PATTERN_BANK:-configs/pattern_banks/pairwise_low_risk_top4.yml}"
 PATTERNS="${PATTERNS:-low_risk_02 low_risk_07 low_risk_06 low_risk_16}"
 MASTER_PORT="${MASTER_PORT:-29500}"
+OUTPUT_DIR="${OUTPUT_DIR:-}"
+RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-}"
 
 IFS=',' read -ra GPU_ARRAY <<< "${CUDA_IDS}"
 NPROC="${NPROC:-${#GPU_ARRAY[@]}}"
@@ -36,6 +38,8 @@ echo "BATCH_SIZE=${BATCH_SIZE}"
 echo "EPOCHS=${EPOCHS}"
 echo "PATTERN_BANK=${PATTERN_BANK}"
 echo "PATTERNS=${PATTERNS}"
+echo "OUTPUT_DIR=${OUTPUT_DIR:-<default ./output/train>}"
+echo "RESUME_CHECKPOINT=${RESUME_CHECKPOINT:-<none>}"
 
 COMMON_TRAIN_ARGS=(
   --val-split val
@@ -61,6 +65,14 @@ COMMON_TRAIN_ARGS=(
   --cuda "${CUDA_IDS}"
 )
 
+EXTRA_TRAIN_ARGS=()
+if [[ -n "${OUTPUT_DIR}" ]]; then
+  EXTRA_TRAIN_ARGS+=(--output "${OUTPUT_DIR}")
+fi
+if [[ -n "${RESUME_CHECKPOINT}" ]]; then
+  EXTRA_TRAIN_ARGS+=(--resume "${RESUME_CHECKPOINT}")
+fi
+
 for PATTERN in ${PATTERNS}; do
   echo "[Fixed Pattern] ${PATTERN}"
   torchrun --nproc_per_node="${NPROC}" --master_port="${MASTER_PORT}" train_sh.py "${DATA_DIR}" \
@@ -71,6 +83,7 @@ for PATTERN in ${PATTERNS}; do
       pattern_mode=fixed \
       pattern_bank="${PATTERN_BANK}" \
       fixed_pattern="${PATTERN}" \
+    "${EXTRA_TRAIN_ARGS[@]}" \
     "${COMMON_TRAIN_ARGS[@]}"
 done
 
